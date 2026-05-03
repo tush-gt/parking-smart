@@ -179,7 +179,7 @@ const HomeScreen = ({ navigation }) => {
         mapRegion? (
         <MapView
           ref={mapRef}
-          provider={PROVIDER_GOOGLE}
+          // provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={mapRegion}
           showsUserLocation={true}

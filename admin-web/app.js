@@ -1,6 +1,6 @@
 // ─── Firebase Config ────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyBsF6job0buTlXVxu4NZF0BkD4_u_acSbo",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: "parking-smart-6ef82.firebaseapp.com",
   projectId: "parking-smart-6ef82",
   storageBucket: "parking-smart-6ef82.firebasestorage.app",

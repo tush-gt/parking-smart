@@ -19,7 +19,11 @@ import ReceiptScreen from './screens/ReceiptScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
 // Set up notification handler
-setupNotificationHandler();
+try {
+  setupNotificationHandler();
+} catch (e) {
+  console.log('Notifications not supported');
+}
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();

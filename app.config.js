@@ -1,11 +1,6 @@
 // app.config.js
 export default {
   expo: {
-    extra:{
-        eas:{
-            projectId: "70ad698e-bb47-4d8d-8c20-b9d78b17ddc3"
-        }
-    },
     name: "parking_smart",
     slug: "parking_smart",
     version: "1.0.0",
@@ -41,6 +36,12 @@ export default {
     },
     plugins: [
       "expo-sharing",
+      [
+        "expo-location",
+        {
+          locationAlwaysAndWhenInUsePermission: "Allow Smart Parking to use your location to find nearby parking spots."
+        }
+      ]
     ],
   },
 };
