@@ -1,6 +1,11 @@
 // app.config.js
 export default {
   expo: {
+    extra:{
+        eas:{
+            projectId: "70ad698e-bb47-4d8d-8c20-b9d78b17ddc3"
+        }
+    },
     name: "parking_smart",
     slug: "parking_smart",
     version: "1.0.0",
@@ -34,5 +39,8 @@ export default {
     web: {
       favicon: "./assets/favicon.png",
     },
+    plugins: [
+      "expo-sharing",
+    ],
   },
 };

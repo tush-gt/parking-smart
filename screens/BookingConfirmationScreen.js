@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { CheckCircle } from 'lucide-react-native';
 import CustomButton from '../components/CustomButton';
+import { notifyBookingConfirmed } from '../services/notificationService';
 
 const BookingConfirmationScreen = ({ route, navigation }) => {
   const { spot, bookingId } = route.params;
+
+  useEffect(() => {
+    notifyBookingConfirmed(spot.name);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>

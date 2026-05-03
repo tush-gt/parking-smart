@@ -1,0 +1,278 @@
+# Smart Parking Finder — Remaining 80% Build Plan
+
+Build out BookingsScreen, ETicketScreen, Payment, Receipts, Notifications, Admin Panel, Super Admin Panel, and Offline enhancements.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Razorpay + Expo Go Incompatibility**
+> `react-native-razorpay` requires **native code** and does NOT work in Expo Go. Two options:
+> - **Option A (Recommended for demo):** Use `expo-linking` to open a Razorpay WebView-based checkout — works in Expo Go, no native build needed.
+> - **Option B (Production):** Use `react-native-razorpay` with `npx expo prebuild` + custom dev build (`npx expo run:android`). Expo Go will no longer work.
+>
+> **I recommend Option A** for your timeline. Which do you prefer?
+
+> [!WARNING]
+> **Push Notifications + Expo Go**
+> Remote push notifications (`expo-notifications`) do NOT work in Expo Go on Android since SDK 53. They require a development build.
+> **Plan:** I'll implement `expo-notifications` for local notifications (which DO work in Expo Go) and structure the code so FCM works when you switch to a dev build later. For now, booking/payment confirmations will use local notifications.
+
+> [!IMPORTANT]
+> **Navigation Restructure**
+> The current app uses a flat `StackNavigator`. To add BookingsScreen, Admin, and role-based tabs, I need to wrap the main flow in a **Bottom Tab Navigator**. Tabs will be:
+> - 🏠 Home (Map + Search)
+> - 📋 Bookings (All/Live/Past)
+> - 👤 Profile (Logout + user info)
+> - 🔧 Admin (only visible if role is "admin" or "superadmin")
+>
+> The Stack navigator will remain for detail screens (ParkingDetail → BookingConfirmation → ETicket → Receipt).
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> 1. **Razorpay Test Key:** You mentioned `rzp_test_xxxx` — do you have an actual Razorpay test key, or should I use a placeholder and you'll fill it in?
+> 2. **SuperAdmin managedBy field:** Currently `managedBy` is a string (e.g. "SmartPark Pvt Ltd"). Should we change it to store the admin's UID instead, so we can filter by it? Or match by email?
+> 3. **PDF Receipt:** `expo-print` + `expo-sharing` will generate & share the PDF. Is that sufficient, or do you need it saved to device storage?
+
+---
+
+## Proposed Changes
+
+### Phase 1 — Dependencies & Navigation Restructure
+
+#### [MODIFY] [package.json](file:///d:/projects-extraww/parking_smart/package.json)
+Install new dependencies:
+```bash
+npx expo install @react-navigation/bottom-tabs @react-native-community/netinfo expo-notifications expo-device expo-constants expo-print expo-sharing
+```
+- `@react-navigation/bottom-tabs` — bottom tab navigator
+- `@react-native-community/netinfo` — offline detection
+- `expo-notifications` + `expo-device` + `expo-constants` — local + push notifications
+- `expo-print` + `expo-sharing` — PDF receipt generation
+
+#### [MODIFY] [App.js](file:///d:/projects-extraww/parking_smart/App.js)
+- Replace flat `StackNavigator` with a nested structure:
+  - `Stack.Navigator` (root — handles auth state)
+    - `Login` screen (when not authenticated)
+    - `MainTabs` (when authenticated) — `BottomTabNavigator`:
+      - **Home Tab** → HomeStack (Home → ParkingDetail → BookingConfirmation)
+      - **Bookings Tab** → BookingsStack (BookingsScreen → ETicketScreen → ReceiptScreen)
+      - **Admin Tab** → AdminScreen (conditional: only if user role is "admin"/"superadmin")
+      - **Profile Tab** → ProfileScreen (user info, logout)
+    - `SuperAdmin` screen (separate stack, accessible from profile or admin)
+- Fetch user role from Firestore on auth state change to conditionally show Admin tab
+- Set up notification handler at app root level
+
+---
+
+### Phase 2 — Bookings Screen
+
+#### [NEW] [BookingsScreen.js](file:///d:/projects-extraww/parking_smart/screens/BookingsScreen.js)
+- **Three tabs** using inline tab bar (TouchableOpacity row, not nested navigator): `All` | `Live` | `Past`
+- Real-time `onSnapshot` listener on `bookings` collection filtered by `userId == auth.currentUser.uid`
+- **Live** tab: bookings where `status` is `"active"` or `"confirmed"`
+- **Past** tab: bookings where `status` is `"completed"` or `"cancelled"`
+- **All** tab: all bookings
+- Each booking card shows:
+  - Spot name, address, date (formatted from `bookedAt`), price/hr
+  - Status badge: green (`confirmed`), blue (`active`), grey (`completed`), red (`cancelled`)
+- Tap on live booking → navigate to `ETicketScreen` with booking data
+- Pull-to-refresh via `RefreshControl`
+- Uses cached bookings from offline service when offline
+
+#### [NEW] [BookingCard.js](file:///d:/projects-extraww/parking_smart/components/BookingCard.js)
+- Reusable booking card component matching existing ParkingCard style
+- Props: booking object, onPress handler
+- Color-coded status badge
+
+---
+
+### Phase 3 — E-Ticket Screen
+
+#### [NEW] [ETicketScreen.js](file:///d:/projects-extraww/parking_smart/screens/ETicketScreen.js)
+- Receives booking data via route params
+- Premium ticket-style card layout:
+  - Top section: "PARKING TICKET" header with dashed border
+  - Booking ID displayed large (monospace font)
+  - Spot name + address
+  - Entry time (formatted from `bookedAt`)
+  - **Live timer**: counts UP from `bookedAt` using `setInterval(1000ms)` — displays `HH:MM:SS`
+  - **Live fare**: `Math.ceil(hoursElapsed) × pricePerHour`, updates every second
+  - Facilities list (from spot data or booking data)
+- Bottom section:
+  - Large "PAY NOW" button (primary blue)
+  - "Need Help?" secondary button
+- On PAY NOW:
+  1. Stop timer
+  2. Freeze final amount
+  3. Navigate to payment flow (or open Razorpay checkout)
+
+---
+
+### Phase 4 — Payment Service & Integration
+
+#### [NEW] [paymentService.js](file:///d:/projects-extraww/parking_smart/services/paymentService.js)
+- **Option A (WebView approach for Expo Go):**
+  - `initiatePayment(amount, userEmail, bookingId)` — constructs Razorpay checkout URL
+  - Uses `expo-linking` / `Linking.openURL()` for test mode
+  - OR a simple in-app WebView modal showing Razorpay checkout page
+- `completeBookingPayment(bookingId, spotId, paymentId, totalAmount)`:
+  1. Update booking doc: `{ status: "completed", endTime: serverTimestamp(), totalAmount, paymentId }`
+  2. Atomically increment `availableSlots` in the parkingSpots doc using a Firestore transaction
+  3. Return success/failure
+
+#### [MODIFY] [ETicketScreen.js](file:///d:/projects-extraww/parking_smart/screens/ETicketScreen.js)
+- Integrate payment flow on PAY NOW tap:
+  1. Calculate `finalAmount = Math.ceil(hoursElapsed) × pricePerHour`
+  2. Call payment service
+  3. On success → call `completeBookingPayment` → navigate to ReceiptScreen
+  4. On failure → Alert, keep booking active
+
+---
+
+### Phase 5 — Receipt Screen
+
+#### [NEW] [ReceiptScreen.js](file:///d:/projects-extraww/parking_smart/screens/ReceiptScreen.js)
+- Receives: bookingId, spotName, spotAddress, entryTime, exitTime, duration, amountPaid, paymentId
+- Layout:
+  - ✅ Green "PAID" badge at top
+  - Detail rows: Booking ID, Spot Name, Address, Entry Time, Exit Time, Duration (hrs + mins), Amount Paid (₹), Payment ID
+  - "Download Receipt" button → uses `expo-print` to generate PDF from HTML template, then `expo-sharing` to share/save
+  - "Back to Home" button
+- Triggers a local notification: "Payment of ₹X received. Receipt generated."
+
+---
+
+### Phase 6 — Notification Service
+
+#### [NEW] [notificationService.js](file:///d:/projects-extraww/parking_smart/services/notificationService.js)
+- `registerForNotifications()`:
+  - Request permissions
+  - Get Expo push token
+  - Save token to user's Firestore doc (`expoPushToken` field)
+- `sendLocalNotification(title, body)`:
+  - Schedule immediate local notification
+  - Works in Expo Go
+- `notifyBookingConfirmed(spotName)`:
+  - "Booking Confirmed at [spotName] — slot held for 15 mins"
+- `notifyPaymentSuccess(amount, hours, spotName)`:
+  - "Payment of ₹X received. Receipt generated."
+
+#### [MODIFY] [App.js](file:///d:/projects-extraww/parking_smart/App.js)
+- Add `Notifications.setNotificationHandler()` at top level
+- Call `registerForNotifications()` after successful auth
+
+#### [MODIFY] [BookingConfirmationScreen.js](file:///d:/projects-extraww/parking_smart/screens/BookingConfirmationScreen.js)
+- Add call to `notifyBookingConfirmed(spot.name)` on mount
+
+---
+
+### Phase 7 — Admin Panel
+
+#### [MODIFY] [userService.js](file:///d:/projects-extraww/parking_smart/services/userService.js)
+- Add `getUserRole(uid)` — fetches user doc and returns `role` field (defaults to `"user"`)
+- Add `role: "user"` to `createUserProfile` defaults
+
+#### [NEW] [AdminScreen.js](file:///d:/projects-extraww/parking_smart/screens/AdminScreen.js)
+- Shows only if user role is `"admin"` or `"superadmin"`
+- Fetches parking spots where `managedBy` matches current user's email or UID
+- For each managed spot:
+  - Spot name, current `availableSlots` / `totalSlots`
+  - `+` / `-` buttons to manually adjust `availableSlots` (direct Firestore update)
+  - Toggle "Open"/"Closed" switch (updates `isOpen` field in parkingSpots doc)
+  - "Today's Bookings" expandable section:
+    - Query `bookings` where `spotId == spot.id` AND `bookedAt >= startOfToday`
+    - Shows: user email, entry time, status, amount
+- Real-time `onSnapshot` listeners for live updates
+
+#### [MODIFY] [parkingService.js](file:///d:/projects-extraww/parking_smart/services/parkingService.js)
+- Add `updateSpotAvailability(spotId, delta)` — increment/decrement availableSlots
+- Add `toggleSpotOpen(spotId, isOpen)` — update isOpen field
+
+---
+
+### Phase 8 — Super Admin Panel
+
+#### [NEW] [SuperAdminScreen.js](file:///d:/projects-extraww/parking_smart/screens/SuperAdminScreen.js)
+- Only accessible if `role === "superadmin"`
+- **Dashboard cards** (top section):
+  - Total parking spots (count of parkingSpots collection)
+  - Total bookings today (query bookings where `bookedAt >= startOfToday`)
+  - Total revenue today (sum of `totalAmount` from completed bookings today)
+  - Active bookings right now (count where `status == "active"`)
+- **All Parking Spots list**: name, availableSlots/totalSlots, isOpen toggle
+- **Admins list**: query users where `role == "admin"`
+- **Add New Spot** button → modal form with all parkingSpots fields
+- **Edit Spot** → pre-filled form modal
+- **Deactivate Spot** → sets `isActive: false`
+- **Assign Admin** → update `managedBy` field
+- **Revenue chart**: Simple bar chart using plain Views (avoid Victory Native dependency). Shows bookings per day for last 7 days.
+- **All Users list** with booking count (paginated)
+
+#### [NEW] [adminService.js](file:///d:/projects-extraww/parking_smart/services/adminService.js)
+- `getDashboardStats()` — returns today's totals
+- `getAllSpots()` — all parking spots with real-time listener
+- `addParkingSpot(spotData)` — creates new doc
+- `updateParkingSpot(spotId, data)` — updates doc
+- `deactivateSpot(spotId)` — sets isActive: false
+- `assignAdmin(spotId, adminEmail)` — updates managedBy
+- `getAllAdmins()` — query users where role == "admin"
+- `getAllUsersWithBookingCount()` — aggregate user data
+
+---
+
+### Phase 9 — Enhanced Offline Service
+
+#### [MODIFY] [offlineService.js](file:///d:/projects-extraww/parking_smart/services/offlineService.js)
+- Add `cacheUserBookings(bookings)` / `getCachedBookings()` — for BookingsScreen offline
+- Add `queueBookingAction(action)` — saves pending booking to AsyncStorage queue
+- Add `getQueuedActions()` / `clearQueue()` — retrieve and flush queue
+- Add `syncQueuedActions()` — called on reconnect to process queued bookings
+- Add `getCacheTimestamp()` / `setCacheTimestamp()` — for "Last updated X mins ago" label
+
+#### [NEW] [OfflineBanner.js](file:///d:/projects-extraww/parking_smart/components/OfflineBanner.js)
+- Uses `@react-native-community/netinfo` `useNetInfo()` hook
+- Shows a yellow/red banner "You're offline — showing cached data" when `isConnected === false`
+- Auto-triggers `syncQueuedActions()` when connectivity is restored
+
+#### [MODIFY] [HomeScreen.js](file:///d:/projects-extraww/parking_smart/screens/HomeScreen.js)
+- Import and render `OfflineBanner` component
+- Show "Last updated X mins ago" when using cached data
+
+#### [MODIFY] [BookingsScreen.js](file:///d:/projects-extraww/parking_smart/screens/BookingsScreen.js)
+- Use `getCachedBookings()` as fallback when offline
+- Show "Last updated" timestamp
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Not applicable — React Native screens are best tested manually on device
+
+### Manual Verification
+1. **Auth Flow:** Login → check role → correct tabs shown (user vs admin vs superadmin)
+2. **Bookings:** Create booking → appears in BookingsScreen (Live tab) → tap → ETicketScreen opens
+3. **E-Ticket:** Timer counts up, fare updates, PAY NOW calculates correct amount
+4. **Payment:** Razorpay checkout opens → on success → booking status updates to "completed", availableSlots increments back
+5. **Receipt:** Shows all details, Download Receipt generates PDF
+6. **Notifications:** Booking confirmed → local notification appears. Payment success → notification appears
+7. **Admin:** Login as admin → see managed spots → adjust slots → toggle open/closed → see today's bookings
+8. **Super Admin:** Dashboard stats are correct → can add/edit/deactivate spots → assign admins
+9. **Offline:** Turn on airplane mode → app shows cached data + banner → queue a booking → reconnect → booking syncs
+
+### Build Order (execution sequence)
+1. Install dependencies
+2. Navigation restructure (App.js)
+3. BookingsScreen + BookingCard
+4. ETicketScreen
+5. paymentService.js + payment integration
+6. ReceiptScreen
+7. notificationService.js + integration
+8. AdminScreen + adminService.js
+9. SuperAdminScreen
+10. Offline enhancements

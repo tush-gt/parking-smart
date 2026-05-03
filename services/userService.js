@@ -21,6 +21,7 @@ export const createUserProfile = async (user) => {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName || user.email.split("@")[0],
+      role: "user",
       createdAt: serverTimestamp(),
       lastLogin: serverTimestamp(),
     };
@@ -52,6 +53,7 @@ export const updateLastLogin = async (user) => {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName || user.email.split("@")[0],
+        role: "user",
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
       };

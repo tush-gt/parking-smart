@@ -12,9 +12,10 @@ import { calculateDistance } from '../services/parkingService';
 import { subscribeToParkingSpots } from '../services/parkingService';
 import { getCachedParkingSpots } from '../services/offlineService';
 import ParkingCard from '../components/ParkingCard';
+import OfflineBanner from '../components/OfflineBanner';
 
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_MAPS_API;
-
+// console.log("MAPS KEY:", process.env.EXPO_PUBLIC_MAPS_API);
 const HomeScreen = ({ navigation }) => {
   const mapRef = useRef(null);
   const [userLocation, setUserLocation] = useState(null);
@@ -33,11 +34,11 @@ const HomeScreen = ({ navigation }) => {
         const loc = await Location.getCurrentPositionAsync({});
         const coords = loc.coords;
 
-        Alert.alert(
-          `Location detected: ${loc.coords}`,
-          `Lat: ${coords.latitude}, Long: ${coords.longitude}`,
-          [{text:'OK'}]
-        )
+        // Alert.alert(
+        //   `Location detected: ${loc.coords}`,
+        //   `Lat: ${coords.latitude}, Long: ${coords.longitude}`,
+        //   [{text:'OK'}]
+        // )
         setUserLocation(coords);
         setMapRegion({
           latitude: coords.latitude,
@@ -136,6 +137,7 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <OfflineBanner />
       {/* Search Bar — floats on top of everything */}
       <View style={styles.searchContainer}>
         <GooglePlacesAutocomplete
