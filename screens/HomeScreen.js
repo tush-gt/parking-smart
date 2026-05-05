@@ -252,11 +252,8 @@
             ) : (
               <MapView
                 ref={mapRef}
-                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
                 style={styles.map}
                 initialRegion={mapRegion}
-                showsUserLocation={true}
-                showsMyLocationButton={true}
                 onRegionChangeComplete={handleMapIdle}
                 onMapReady={() => {
                   if (mapRegion && mapRef.current) {
