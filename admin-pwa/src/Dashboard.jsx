@@ -82,7 +82,7 @@ const Dashboard = ({ user, role }) => {
     <div className="dashboard">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <Car size={20} color="#2563eb" />
+          <Car size={20} color="#00d2ff" />
           <h2>Smart Parking</h2>
         </div>
         <nav className="sidebar-nav">
@@ -136,7 +136,9 @@ const Overview = ({ spots, bookings, role }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const todaysBookings = bookings.filter(b => b.bookedAt?.toDate() >= today);
+  const parseDate = (val) => val?.toDate ? val.toDate() : new Date(val);
+
+  const todaysBookings = bookings.filter(b => b.bookedAt && parseDate(b.bookedAt) >= today);
   const activeBookings = todaysBookings.filter(b => b.status === 'active' || b.status === 'confirmed').length;
   const revenue = todaysBookings.filter(b => b.status === 'completed' && b.totalAmount).reduce((sum, b) => sum + b.totalAmount, 0);
 
@@ -151,7 +153,7 @@ const Overview = ({ spots, bookings, role }) => {
       const end = new Date(d); end.setHours(23,59,59,999);
       
       const dayRev = bookings
-        .filter(b => b.status === 'completed' && b.bookedAt?.toDate() >= start && b.bookedAt?.toDate() <= end)
+        .filter(b => b.status === 'completed' && b.bookedAt && parseDate(b.bookedAt) >= start && parseDate(b.bookedAt) <= end)
         .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
       
       if (dayRev > maxRev) maxRev = dayRev;
