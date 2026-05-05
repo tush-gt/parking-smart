@@ -8,6 +8,7 @@ import { db, auth } from '../services/firebaseConfig';
 import { getCachedBookings } from '../services/offlineService';
 import BookingCard from '../components/BookingCard';
 import OfflineBanner from '../components/OfflineBanner';
+import { ClipboardList } from 'lucide-react-native';
 
 const TABS = [
   { key: 'all', label: 'All' },
@@ -15,11 +16,17 @@ const TABS = [
   { key: 'past', label: 'Past' },
 ];
 
-const BookingsScreen = ({ navigation }) => {
+const BookingsScreen = ({ route, navigation }) => {
   const [bookings, setBookings] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab);
+    }
+  }, [route?.params?.tab]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -128,7 +135,9 @@ const BookingsScreen = ({ navigation }) => {
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📋</Text>
+            <View style={{ marginBottom: 16 }}>
+              <ClipboardList size={48} color="#94a3b8" />
+            </View>
             <Text style={styles.emptyText}>
               {activeTab === 'live' ? 'No active bookings' :
                activeTab === 'past' ? 'No past bookings' :

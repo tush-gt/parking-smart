@@ -111,12 +111,28 @@ export default function App() {
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setUser(user);
       if (initializing) setInitializing(false);
     });
 
-    return unsubscribe;
+    const { setupNetworkListener, syncOfflineQueue } = require('./services/offlineService');
+    const { notifyOfflineSync } = require('./services/notificationService');
+
+    const unsubscribeNet = setupNetworkListener(async () => {
+      const processed = await syncOfflineQueue(async (action) => {
+        // Simple queue processor (currently only one action type if any)
+        console.log('Processing action:', action);
+      });
+      if (processed > 0) {
+        notifyOfflineSync(processed);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeNet();
+    };
   }, []);
 
   if (initializing) return null;

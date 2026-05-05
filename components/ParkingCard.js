@@ -1,18 +1,28 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MapPin, Car, Navigation } from 'lucide-react-native';
+import { MapPin, Car, Navigation, Ban } from 'lucide-react-native';
 
-const ParkingCard = ({ spot, distance, onPress }) => {
+const ParkingCard = ({ spot, distance, userVehicleType = 'Car', onPress }) => {
   const isAvailable = spot.availableSlots > 0;
+  const supported = spot.supportedVehicles || ['Car', 'Bike'];
+  const isCompatible = supported.includes(userVehicleType);
   
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress}>
+    <TouchableOpacity style={[styles.card, !isCompatible && styles.cardIncompatible]} onPress={onPress}>
       <View style={styles.header}>
-        <Text style={styles.name}>{spot.name}</Text>
-        <View style={[styles.badge, { backgroundColor: isAvailable ? '#dcfce7' : '#fee2e2' }]}>
-          <Text style={[styles.badgeText, { color: isAvailable ? '#166534' : '#991b1b' }]}>
-            {isAvailable ? 'Available' : 'Full'}
-          </Text>
+        <Text style={styles.name} numberOfLines={1}>{spot.name}</Text>
+        <View style={{flexDirection: 'row', gap: 6, alignItems: 'center'}}>
+          {!isCompatible && (
+            <View style={[styles.badge, { backgroundColor: '#fee2e2', flexDirection: 'row', alignItems: 'center' }]}>
+              <Ban size={10} color="#dc2626" style={{marginRight: 4}}/>
+              <Text style={[styles.badgeText, { color: '#dc2626' }]}>{supported.join(', ')} only</Text>
+            </View>
+          )}
+          <View style={[styles.badge, { backgroundColor: isAvailable ? '#dcfce7' : '#fee2e2' }]}>
+            <Text style={[styles.badgeText, { color: isAvailable ? '#166534' : '#991b1b' }]}>
+              {isAvailable ? 'Available' : 'Full'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -52,6 +62,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
   },
+  cardIncompatible: {
+    opacity: 0.8,
+    borderColor: '#fecaca',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -62,6 +76,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1e293b',
+    flex: 1,
+    marginRight: 8,
   },
   badge: {
     paddingHorizontal: 8,

@@ -180,8 +180,24 @@ export const getCacheAge = async () => {
 export const isOnline = async () => {
   try {
     const state = await NetInfo.fetch();
-    return state.isConnected;
+    return state.isConnected && state.isInternetReachable;
   } catch (e) {
     return false;
   }
+};
+
+/**
+ * Listen for network changes and trigger sync when back online.
+ */
+export const setupNetworkListener = (onReconnect) => {
+  let wasOffline = false;
+  return NetInfo.addEventListener(state => {
+    const online = state.isConnected && state.isInternetReachable;
+    if (!online) {
+      wasOffline = true;
+    } else if (online && wasOffline) {
+      wasOffline = false;
+      if (onReconnect) onReconnect();
+    }
+  });
 };

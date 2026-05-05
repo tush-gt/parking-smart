@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, StyleSheet, Dimensions, FlatList,
-  Text, ActivityIndicator, TouchableOpacity, Alert
+  Text, ActivityIndicator, TouchableOpacity, Alert, Platform, Image
 } from 'react-native';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import { List, Map as MapIcon } from 'lucide-react-native';
+import { List, Map as MapIcon, MapPin, X, Ban } from 'lucide-react-native';
 // Firebase imports available via services
 import { calculateDistance } from '../services/parkingService';
 import { subscribeToParkingSpots } from '../services/parkingService';
 import { getCachedParkingSpots } from '../services/offlineService';
+import { getUserProfile } from '../services/userService';
+import { auth } from '../services/firebaseConfig';
 import ParkingCard from '../components/ParkingCard';
 import OfflineBanner from '../components/OfflineBanner';
 
@@ -25,6 +27,27 @@ const HomeScreen = ({ navigation }) => {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('map');
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlineSnapshot, setOfflineSnapshot] = useState(null);
+  const [userVehicleType, setUserVehicleType] = useState('Car');
+  const [activeVehicle, setActiveVehicle] = useState(null);
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      getUserProfile(auth.currentUser.uid).then(res => {
+        if (res.success && res.data.vehicles) {
+          const active = res.data.vehicles.find(v => v.isActive) || res.data.vehicles[0];
+          if (active) {
+            setActiveVehicle(active);
+            setUserVehicleType(active.type);
+          }
+        } else if (res.success && res.data.vehicleType) {
+          // Fallback for older profiles
+          setUserVehicleType(res.data.vehicleType);
+        }
+      });
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -74,6 +97,39 @@ const HomeScreen = ({ navigation }) => {
       return () => unsubscribe();
     })();
   }, []);
+
+  useEffect(() => {
+    // Load last offline snapshot
+    import('@react-native-async-storage/async-storage').then(({ default: AsyncStorage }) => {
+      AsyncStorage.getItem('@offline_map_snapshot').then(val => {
+        if (val) setOfflineSnapshot(val);
+      });
+    });
+
+    const { default: NetInfo } = require('@react-native-community/netinfo');
+    const unsubNet = NetInfo.addEventListener(state => {
+      setIsOffline(!state.isConnected || !state.isInternetReachable);
+    });
+    return () => unsubNet();
+  }, []);
+
+  const handleMapIdle = async () => {
+    if (mapRef.current && !isOffline) {
+      try {
+        const snapshot = await mapRef.current.takeSnapshot({
+          format: 'base64',
+          quality: 0.5,
+          result: 'base64'
+        });
+        const base64Str = `data:image/png;base64,${snapshot}`;
+        setOfflineSnapshot(base64Str);
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        await AsyncStorage.setItem('@offline_map_snapshot', base64Str);
+      } catch (e) {
+        console.log('Snapshot failed', e);
+      }
+    }
+  };
 
   // 2. When user picks a place from autocomplete
   const handlePlaceSelect = async (data, placeDetails) => {
@@ -161,7 +217,7 @@ const HomeScreen = ({ navigation }) => {
         />
         {selectedPlace && (
           <TouchableOpacity style={styles.clearBtn} onPress={handleReset}>
-            <Text style={styles.clearText}>✕</Text>
+            <X size={20} color="#94a3b8" />
           </TouchableOpacity>
         )}
       </View>
@@ -169,46 +225,69 @@ const HomeScreen = ({ navigation }) => {
       {/* Selected place label */}
       {selectedPlace && (
         <View style={styles.selectedLabel}>
-          <Text style={styles.selectedText}>
-            📍 {filteredSpots.length} parking spot{filteredSpots.length !== 1 ? 's' : ''} near {selectedPlace.name}
-          </Text>
+          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+            <MapPin size={14} color="#fff" style={{marginRight: 4}} />
+            <Text style={styles.selectedText}>
+              {filteredSpots.length} parking spot{filteredSpots.length !== 1 ? 's' : ''} near {selectedPlace.name}
+            </Text>
+          </View>
         </View>
       )}
 
       {viewMode === 'map' ? (
         mapRegion? (
-        <MapView
-          ref={mapRef}
-          // provider={PROVIDER_GOOGLE}
-          style={styles.map}
-          initialRegion={mapRegion}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          onMapReady={() => {
-            if (mapRegion && mapRef.current) {
-              mapRef.current.animateToRegion(mapRegion, 1000);
-            }
-          }}
-        >
-          {displayedSpots.map((spot) => (
-            <Marker
-              key={spot.id}
-              coordinate={{
-                latitude: parseFloat(spot.latitude),
-                longitude: parseFloat(spot.longitude),
+          isOffline && offlineSnapshot ? (
+            <View style={styles.map}>
+              <Image source={{ uri: offlineSnapshot }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+              <View style={styles.offlineOverlay}>
+                <Text style={styles.offlineOverlayText}>Map tiles unavailable (Offline)</Text>
+              </View>
+            </View>
+          ) : (
+            <MapView
+              ref={mapRef}
+              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+              style={styles.map}
+              initialRegion={mapRegion}
+              showsUserLocation={true}
+              showsMyLocationButton={true}
+              onRegionChangeComplete={handleMapIdle}
+              onMapReady={() => {
+                if (mapRegion && mapRef.current) {
+                  mapRef.current.animateToRegion(mapRegion, 1000);
+                }
               }}
-              pinColor={spot.availableSlots > 5 ? 'green' : spot.availableSlots > 0 ? 'orange' : 'red'}
             >
-              <Callout onPress={() => navigation.navigate('ParkingDetail', { spot, location: userLocation })}>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutTitle}>{spot.name}</Text>
-                  <Text style={styles.calloutSub}>{spot.availableSlots} slots • ₹{spot.pricePerHour}/hr</Text>
-                  <Text style={styles.calloutAction}>Tap for details →</Text>
-                </View>
-              </Callout>
-            </Marker>
-          ))}
-        </MapView>
+              {displayedSpots.map((spot) => {
+                const supported = spot.supportedVehicles || ['Car', 'Bike'];
+                const isCompatible = supported.includes(userVehicleType);
+                return (
+                <Marker
+                  key={spot.id}
+                  coordinate={{
+                    latitude: parseFloat(spot.latitude),
+                    longitude: parseFloat(spot.longitude),
+                  }}
+                  pinColor={spot.availableSlots > 5 ? 'green' : spot.availableSlots > 0 ? 'orange' : 'red'}
+                >
+                  <Callout onPress={() => navigation.navigate('ParkingDetail', { spot, location: userLocation, userVehicleType, activeVehicle })}>
+                    <View style={styles.callout}>
+                      <Text style={styles.calloutTitle}>{spot.name}</Text>
+                      <Text style={styles.calloutSub}>{spot.availableSlots} slots • ₹{spot.pricePerHour}/hr</Text>
+                      {!isCompatible && (
+                        <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
+                          <Ban size={12} color="#dc2626" style={{marginRight: 4}}/>
+                          <Text style={{color: '#dc2626', fontWeight: 'bold', fontSize: 11}}>Incompatible ({supported.join(', ')})</Text>
+                        </View>
+                      )}
+                      <Text style={styles.calloutAction}>Tap for details →</Text>
+                    </View>
+                  </Callout>
+                </Marker>
+                );
+              })}
+            </MapView>
+          )
       ) : (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#2563eb" />
@@ -223,7 +302,8 @@ const HomeScreen = ({ navigation }) => {
             <ParkingCard
               spot={item}
               distance={userLocation ? calculateDistance(userLocation.latitude, userLocation.longitude, item.latitude, item.longitude) : '...'}
-              onPress={() => navigation.navigate('ParkingDetail', { spot: item, location: userLocation })}
+              userVehicleType={userVehicleType}
+              onPress={() => navigation.navigate('ParkingDetail', { spot: item, location: userLocation, userVehicleType, activeVehicle })}
             />
           )}
           ListEmptyComponent={
@@ -246,7 +326,7 @@ const HomeScreen = ({ navigation }) => {
       >
         {viewMode === 'map'
           ? <List color="#fff" size={24} />
-          : <Text style={{ color: '#fff', fontSize: 18 }}>🗺</Text>
+          : <MapIcon color="#fff" size={24} />
         }
       </TouchableOpacity>
     </View>
@@ -261,6 +341,16 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#64748b', fontSize: 16 },
+  offlineOverlay: {
+    position: 'absolute',
+    top: '45%',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  offlineOverlayText: { color: '#fff', fontWeight: '600' },
 
   // Search
   searchContainer: {

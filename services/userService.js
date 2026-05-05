@@ -6,7 +6,7 @@ import { db } from "./firebaseConfig";
  * Uses the Auth UID as the document ID so it's linked to Firebase Auth.
  * Called on user registration (sign up).
  */
-export const createUserProfile = async (user) => {
+export const createUserProfile = async (user, additionalData = {}) => {
   const userRef = doc(db, "users", user.uid);
 
   try {
@@ -20,8 +20,12 @@ export const createUserProfile = async (user) => {
     const userData = {
       uid: user.uid,
       email: user.email,
-      displayName: user.displayName || user.email.split("@")[0],
+      displayName: additionalData.name || user.email.split("@")[0],
+      phone: additionalData.phone || null,
       role: "user",
+      age: additionalData.age || null,
+      idProof: additionalData.idProof || null,
+      vehicles: additionalData.vehicles || [],
       createdAt: serverTimestamp(),
       lastLogin: serverTimestamp(),
     };
@@ -31,6 +35,29 @@ export const createUserProfile = async (user) => {
     return { success: true, data: userData };
   } catch (error) {
     console.error("Error creating user profile:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Update the active vehicle in a user's profile.
+ */
+export const updateActiveVehicle = async (userId, vehicleId) => {
+  const userRef = doc(db, "users", userId);
+  try {
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) return { success: false, error: "User not found" };
+
+    const data = userSnap.data();
+    const updatedVehicles = (data.vehicles || []).map(v => ({
+      ...v,
+      isActive: v.id === vehicleId
+    }));
+
+    await setDoc(userRef, { vehicles: updatedVehicles }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating active vehicle:", error);
     return { success: false, error: error.message };
   }
 };

@@ -45,8 +45,8 @@ const BookingConfirmationScreen = ({ route, navigation }) => {
         </View>
 
         <CustomButton 
-          title="Back to Home" 
-          onPress={() => navigation.navigate('Home')} 
+          title="View Live Booking" 
+          onPress={() => navigation.navigate('Bookings', { screen: 'BookingsList', params: { tab: 'live' } })} 
           style={styles.btn}
         />
       </View>

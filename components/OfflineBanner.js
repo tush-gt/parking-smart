@@ -1,39 +1,56 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { getCacheAge } from '../services/offlineService';
 
 const OfflineBanner = () => {
-  const [isConnected, setIsConnected] = React.useState(true);
+  const [isOffline, setIsOffline] = useState(false);
+  const [cacheAge, setCacheAge] = useState(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected);
+      setIsOffline(!state.isConnected || !state.isInternetReachable);
     });
-    return () => unsubscribe();
+
+    const checkCache = async () => {
+      const age = await getCacheAge();
+      setCacheAge(age);
+    };
+    checkCache();
+    
+    // Interval to keep cache age updated
+    const interval = setInterval(checkCache, 60000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
-  if (isConnected) return null;
+  if (!isOffline) return null;
 
   return (
-    <View style={styles.banner}>
-      <Text style={styles.text}>📶  You're offline — showing cached data</Text>
+    <View style={styles.container}>
+      <Text style={styles.text}>
+        ⚠️ Offline Mode. Showing cached data {cacheAge ? `(${cacheAge})` : ''}.
+      </Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  banner: {
-    backgroundColor: '#fef3c7',
-    paddingVertical: 10,
+  container: {
+    backgroundColor: '#fb923c', // Orange for offline warning
+    paddingVertical: 8,
     paddingHorizontal: 16,
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#fcd34d',
+    justifyContent: 'center',
+    zIndex: 1000,
   },
   text: {
-    color: '#92400e',
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
 

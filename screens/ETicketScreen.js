@@ -48,15 +48,16 @@ const ETicketScreen = ({ route, navigation }) => {
     return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const hoursElapsed = elapsedSeconds / 3600;
-  const currentFare = Math.max(booking.pricePerHour, Math.ceil(hoursElapsed) * booking.pricePerHour);
+  // For demonstration: 1 minute = 1 unit of fare
+  const minutesElapsed = elapsedSeconds / 60;
+  const currentFare = Math.max(booking.pricePerHour, Math.ceil(minutesElapsed) * booking.pricePerHour);
 
   const handlePayNow = () => {
-    const finalAmount = Math.max(booking.pricePerHour, Math.ceil(hoursElapsed) * booking.pricePerHour);
+    const finalAmount = Math.max(booking.pricePerHour, Math.ceil(minutesElapsed) * booking.pricePerHour);
 
     Alert.alert(
       'Confirm Payment',
-      `Pay ₹${finalAmount} for ${Math.ceil(hoursElapsed)} hour${Math.ceil(hoursElapsed) !== 1 ? 's' : ''} at ${booking.spotName}?`,
+      `Pay ₹${finalAmount} for ${Math.ceil(minutesElapsed)} minute${Math.ceil(minutesElapsed) !== 1 ? 's' : ''} at ${booking.spotName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

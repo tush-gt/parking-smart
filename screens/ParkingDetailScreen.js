@@ -13,36 +13,59 @@ import { bookParkingSlot, calculateDistance } from '../services/parkingService';
 import CustomButton from '../components/CustomButton';
 
 const ParkingDetailScreen = ({ route, navigation }) => {
-  const { spot, location } = route.params;
+  const { spot, location, userVehicleType = 'Car' } = route.params;
   const [booking, setBooking] = useState(false);
+
+  const supported = spot.supportedVehicles || ['Car', 'Bike'];
+  const isCompatible = supported.includes(userVehicleType);
 
   const distance = location 
     ? calculateDistance(location.latitude, location.longitude, spot.latitude, spot.longitude) 
     : '...';
 
+  const executeBooking = async () => {
+    setBooking(true);
+    const result = await bookParkingSlot(spot, route.params.activeVehicle);
+    setBooking(false);
+    
+    if (result.success) {
+      navigation.navigate('BookingConfirmation', { 
+        spot, 
+        bookingId: result.bookingId 
+      });
+    } else {
+      Alert.alert("Booking Failed", result.error || "Please try again later.");
+    }
+  };
+
   const handleBooking = async () => {
+    if (!isCompatible) {
+      Alert.alert(
+        "Incompatible Vehicle",
+        `This parking spot only supports ${supported.join(' and ')}. Your registered vehicle is a ${userVehicleType}.\n\nAre you sure you want to proceed?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Book Anyway", style: "destructive", onPress: () => {
+            Alert.alert(
+              "Confirm Booking",
+              `Do you want to book a slot at ${spot.name} for Rs${spot.pricePerHour}/hr?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Book Now", onPress: executeBooking }
+              ]
+            );
+          }}
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       "Confirm Booking",
       `Do you want to book a slot at ${spot.name} for Rs${spot.pricePerHour}/hr?`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Book Now", 
-          onPress: async () => {
-            setBooking(true);
-            const result = await bookParkingSlot(spot);
-            setBooking(false);
-            
-            if (result.success) {
-              navigation.navigate('BookingConfirmation', { 
-                spot, 
-                bookingId: result.bookingId 
-              });
-            } else {
-              Alert.alert("Booking Failed", result.error || "Please try again later.");
-            }
-          }
-        }
+        { text: "Book Now", onPress: executeBooking }
       ]
     );
   };

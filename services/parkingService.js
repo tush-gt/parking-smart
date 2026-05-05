@@ -34,7 +34,7 @@ export const subscribeToParkingSpots = (onUpdate, onError) => {
  * 1. Uses a Firestore transaction to decrement availableSlots (Cloud Computing).
  * 2. Saves a booking record to the "bookings" collection linked by user UID.
  */
-export const bookParkingSlot = async (spot) => {
+export const bookParkingSlot = async (spot, activeVehicle = null) => {
   const spotDocRef = doc(db, "parkingSpots", spot.id);
   const currentUser = auth.currentUser;
 
@@ -58,10 +58,27 @@ export const bookParkingSlot = async (spot) => {
       transaction.update(spotDocRef, { availableSlots: newAvailable });
     });
 
+    // Fetch user details for the booking record
+    const { getDoc } = require("firebase/firestore");
+    const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    
+    const bookingDetails = {
+      ownerName: userData.displayName || currentUser.email,
+      ownerPhone: userData.phone || 'N/A',
+      vehicle: activeVehicle || null
+    };
+
     // Save booking record to Firestore (linked by user UID)
-    const bookingResult = await saveBookingRecord(currentUser.uid, spot);
+    const bookingResult = await saveBookingRecord(currentUser.uid, spot, bookingDetails);
 
     if (bookingResult.success) {
+      try {
+        const { notifyBookingConfirmed } = require('./notificationService');
+        await notifyBookingConfirmed(spot.name);
+      } catch (e) {
+        console.log('Notification failed', e);
+      }
       return { success: true, bookingId: bookingResult.bookingId };
     } else {
       return { success: true, bookingId: null }; // Slot was booked even if record save failed

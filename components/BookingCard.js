@@ -1,59 +1,113 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MapPin, Clock, IndianRupee } from 'lucide-react-native';
+import { Clock, IndianRupee } from 'lucide-react-native';
 
-const STATUS_CONFIG = {
-  confirmed: { bg: '#dbeafe', color: '#1d4ed8', label: 'Confirmed' },
-  active:    { bg: '#dcfce7', color: '#166534', label: 'Active' },
-  completed: { bg: '#f1f5f9', color: '#475569', label: 'Completed' },
-  cancelled: { bg: '#fee2e2', color: '#991b1b', label: 'Cancelled' },
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'confirmed':
+      return { bg: '#dbeafe', text: '#2563eb' };
+    case 'active':
+      return { bg: '#fef08a', text: '#ca8a04' };
+    case 'completed':
+      return { bg: '#dcfce7', text: '#16a34a' };
+    case 'cancelled':
+      return { bg: '#fee2e2', text: '#dc2626' };
+    default:
+      return { bg: '#f1f5f9', text: '#64748b' };
+  }
 };
 
 const BookingCard = ({ booking, onPress }) => {
-  const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.confirmed;
+  const { bg, text } = getStatusColor(booking.status);
+  const [elapsed, setElapsed] = useState(0);
   
-  const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString('en-IN', {
-      day: 'numeric', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+  // Format dates safely
+  let bookedAtStr = 'Unknown Time';
+  let startTime = null;
+  if (booking.bookedAt) {
+    const dateObj = booking.bookedAt.toDate ? booking.bookedAt.toDate() : new Date(booking.bookedAt);
+    startTime = dateObj.getTime();
+    bookedAtStr = dateObj.toLocaleString('en-IN', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     });
+  }
+
+  useEffect(() => {
+    if ((booking.status !== 'active' && booking.status !== 'confirmed') || !startTime) return;
+    setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [booking.status, startTime]);
+
+  const mins = elapsed / 60;
+  const currentFare = Math.max(booking.pricePerHour, Math.ceil(mins) * booking.pricePerHour);
+
+  const formatTimer = (totalSeconds) => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
   return (
-    <TouchableOpacity 
-      style={styles.card} 
+    <TouchableOpacity
+      style={styles.card}
       onPress={onPress}
       activeOpacity={0.7}
+      disabled={booking.status === 'completed' || booking.status === 'cancelled'}
     >
-      <View style={styles.header}>
-        <Text style={styles.name} numberOfLines={1}>{booking.spotName}</Text>
-        <View style={[styles.badge, { backgroundColor: status.bg }]}>
-          <Text style={[styles.badgeText, { color: status.color }]}>{status.label}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.spotName} numberOfLines={1}>{booking.spotName}</Text>
+        <View style={[styles.badge, { backgroundColor: bg }]}>
+          <Text style={[styles.badgeText, { color: text }]}>
+            {booking.status.toUpperCase()}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.infoRow}>
-        <MapPin size={14} color="#64748b" />
-        <Text style={styles.infoText} numberOfLines={1}>{booking.spotAddress || 'N/A'}</Text>
-      </View>
-
-      <View style={styles.footer}>
-        <View style={styles.footerItem}>
-          <Clock size={14} color="#94a3b8" />
-          <Text style={styles.footerText}>{formatDate(booking.bookedAt)}</Text>
+      <Text style={styles.address} numberOfLines={1}>{booking.spotAddress || 'Location unavailable'}</Text>
+      
+      <View style={styles.detailsRow}>
+        <View style={styles.detailItem}>
+          <Text style={styles.detailLabel}>Booked At</Text>
+          <Text style={styles.detailValue}>{bookedAtStr}</Text>
         </View>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>₹{booking.pricePerHour}</Text>
-          <Text style={styles.perHour}>/hr</Text>
-        </View>
+        {(booking.status === 'active' || booking.status === 'confirmed') ? (
+          <>
+            <View style={styles.detailItem}>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <Clock size={12} color="#94a3b8" style={{marginRight: 4}}/>
+                <Text style={styles.detailLabel}>Elapsed</Text>
+              </View>
+              <Text style={styles.detailValue}>{formatTimer(elapsed)}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <IndianRupee size={12} color="#94a3b8" style={{marginRight: 4}}/>
+                <Text style={styles.detailLabel}>Live Fare</Text>
+              </View>
+              <Text style={[styles.detailValue, {color: '#2563eb'}]}>₹{currentFare}</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Rate</Text>
+            <Text style={styles.detailValue}>₹{booking.pricePerHour}/hr</Text>
+          </View>
+        )}
+        {booking.totalAmount && (
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Paid</Text>
+            <Text style={styles.detailValue}>₹{booking.totalAmount}</Text>
+          </View>
+        )}
       </View>
-
-      {booking.totalAmount && (
-        <View style={styles.totalRow}>
-          <IndianRupee size={14} color="#166534" />
-          <Text style={styles.totalText}>Total Paid: ₹{booking.totalAmount}</Text>
+      
+      {(booking.status === 'confirmed' || booking.status === 'active') && (
+        <View style={styles.footer}>
+          <Text style={styles.actionText}>Tap to view E-Ticket →</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -65,91 +119,74 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    marginBottom: 16,
     elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
-  name: {
-    fontSize: 17,
-    fontWeight: '700',
+  spotName: {
+    fontSize: 18,
+    fontWeight: '800',
     color: '#1e293b',
     flex: 1,
     marginRight: 8,
   },
   badge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 8,
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  infoText: {
-    marginLeft: 6,
-    fontSize: 13,
+  address: {
+    fontSize: 14,
     color: '#64748b',
-    flex: 1,
+    marginBottom: 16,
   },
-  footer: {
+  detailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingTop: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
   },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  detailItem: {
+    flex: 1,
   },
-  footerText: {
-    marginLeft: 6,
-    fontSize: 13,
-    color: '#64748b',
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  price: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  perHour: {
+  detailLabel: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#94a3b8',
+    marginBottom: 4,
+    fontWeight: '500',
   },
-  totalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  totalText: {
-    marginLeft: 6,
+  detailValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#166534',
+    color: '#334155',
+  },
+  footer: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    alignItems: 'flex-end',
+  },
+  actionText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
