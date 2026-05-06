@@ -3,7 +3,7 @@
     View, StyleSheet, Dimensions, FlatList,
     Text, ActivityIndicator, TouchableOpacity, Alert, Platform, Image
   } from 'react-native';
-  import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
+  import MapView, { Marker, Callout, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
   import * as Location from 'expo-location';
   import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
   import { List, Map as MapIcon, MapPin, X, Ban } from 'lucide-react-native';
@@ -207,7 +207,7 @@
             fetchDetails={true}
             onPress={handlePlaceSelect}
             query={{
-              key: GOOGLE_PLACES_API_KEY,
+              key: process.env.EXPO_PUBLIC_MAPS_API,
               language: 'en',
               components: 'country:in', // restrict to India
             }}
@@ -254,6 +254,7 @@
                 ref={mapRef}
                 style={styles.map}
                 initialRegion={mapRegion}
+                // mapType="none"
                 onRegionChangeComplete={handleMapIdle}
                 onMapReady={() => {
                   if (mapRegion && mapRef.current) {
@@ -261,6 +262,15 @@
                   }
                 }}
               >
+                {/* Fallback to OpenStreetMap Tiles */}
+                <UrlTile
+                  urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  maximumZ={19}
+                  flipY={false}
+                  tileSize={256}      
+                  zIndex={-1}
+                />
+                
                 {displayedSpots.map((spot) => {
                   const supported = spot.supportedVehicles || ['Car', 'Bike'];
                   const isCompatible = supported.includes(userVehicleType);
