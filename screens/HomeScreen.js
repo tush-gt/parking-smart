@@ -157,7 +157,7 @@
       // Filter spots near this place (within ~500m radius)
       const nearby = allSpots.filter(spot => {
         const dist = calculateDistance(lat, lng, spot.latitude, spot.longitude);
-        return parseFloat(dist) <= 0.5; // 0.5 km = 500m radius
+        return parseFloat(dist) <= 5.0; // 5 km radius
       });
       setFilteredSpots(nearby);
     };
@@ -178,8 +178,9 @@
       }
     };
 
-    const displayedSpots = filteredSpots.length > 0 ? filteredSpots : 
-      (selectedPlace ? [] : allSpots); // if searched but no results, show empty
+    const activeAllSpots = allSpots.filter(s => s.isOpen !== false);
+    const displayedSpots = filteredSpots.length > 0 ? filteredSpots.filter(s => s.isOpen !== false) : 
+      (selectedPlace ? [] : activeAllSpots); // if searched but no results, show empty
 
     const sortedSpots = [...displayedSpots].sort((a, b) => {
       if (!userLocation) return 0;

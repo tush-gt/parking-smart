@@ -47,14 +47,20 @@ const Dashboard = ({ user, role }) => {
   };
 
   const adjustSlots = async (id, delta) => {
-    const spotRef = doc(db, 'parkingSpots', id);
-    await runTransaction(db, async (tx) => {
-      const d = await tx.get(spotRef);
-      const current = d.data().availableSlots;
-      const total = d.data().totalSlots;
-      const newVal = Math.max(0, Math.min(total, current + delta));
-      tx.update(spotRef, { availableSlots: newVal });
-    });
+    try {
+      const spotRef = doc(db, 'parkingSpots', id);
+      await runTransaction(db, async (tx) => {
+        const d = await tx.get(spotRef);
+        if (!d.exists()) return;
+        const current = Number(d.data().availableSlots) || 0;
+        const total = Number(d.data().totalSlots) || 0;
+        const newVal = Math.max(0, Math.min(total, current + delta));
+        tx.update(spotRef, { availableSlots: newVal });
+      });
+    } catch (err) {
+      console.error("Failed to adjust slots:", err);
+      alert("Error adjusting slots.");
+    }
   };
 
   const updateUserRole = async (id, newRole) => {
